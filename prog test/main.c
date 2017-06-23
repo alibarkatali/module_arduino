@@ -25,15 +25,36 @@
  */
 #include <stdio.h>
 #include <curl/curl.h>
+#include <sys/fcntl.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 int main(void)
 {
     CURL *curl;
     CURLcode res;
+    int fd;
+    int test=0;
+    char buf[255];
 
     /* In windows, this will init the winsock stuff */
     curl_global_init(CURL_GLOBAL_ALL);
     struct curl_slist *list = NULL;
+
+    if ((fd=open("/dev/ttyACM0",O_RDWR)) == -1){
+        perror("open");
+        exit(-1);
+    }
+    while (test == 0) {
+        int nb = read(fd, &buf, 255);
+        buf[nb] = '\0';
+
+
+        if (nb > 0) {
+            printf("%s\n", buf);
+            test = 1;
+        }
+    }
 
     /* get a curl handle */
     curl = curl_easy_init();
@@ -44,8 +65,8 @@ int main(void)
         curl_easy_setopt(curl, CURLOPT_URL, "http://fast-wave-77815.herokuapp.com/metrology");
         //curl_easy_setopt(curl, CURLOPT_URL, "http://127.0.0.1:5000/metrology");
         /* Now specify the POST data */
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{\"timestamp\" : \"24\",\"weather\" : {\"dfn\" : \"0\", \"weather\" : \"RAINNY\"}}");
-
+        //curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{\"timestamp\" : \"24\",\"weather\" : {\"dfn\" : \"0\", \"weather\" : \"RAINNY\"}}");
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, buf);
 
         list = curl_slist_append(list, "content-Type:application/json");
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);

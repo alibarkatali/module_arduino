@@ -1,4 +1,5 @@
 #include <LiquidCrystal.h>
+#include <math.h>
 
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);           // select the pins used on the LCD panel
 
@@ -13,16 +14,95 @@ int adc_key_in  = 0;
 #define btnSELECT 4
 #define btnNONE   5
 
+#define RAINNY        0
+#define CLOUDY        1
+#define SUNNY         2
+#define HEATWAVE      3 
+#define THUNDERSTORM  4
+
+typedef enum {
+  H_INIT,
+  H_IDLE,
+  H_TICK_H,
+  H_TICK_D
+} HORLOGE_STATE;
+
+typedef enum {
+  M_IDLE,
+  M_SELECT
+} METROLOGY_STATE;
+
+typedef enum {
+  rainny,
+  cloudy,
+  sunny,
+  heatwave,
+  thunderstorm
+} WEATHER;
+
+// Etats courants
+HORLOGE_STATE horlogeState;
+METROLOGY_STATE metrologyState;
+int currentWeather, forecastWeather;
+
+// Variables globales
+unsigned long timer = 0;
+int tempoHour = 200;
+int nb_h = 0, nb_d = 0;
+bool tickHour = 0, tickDay = 0;
+String currentWeatherString, forecastWeatherString;
+
+// Définitions des fonctions de la tâche Horloge
+void horlogeInit();
+void horlogeUpdate();
+void horlogeOutput();
+
+// Définitions des fonctions de la tâche Horloge
+void metrologyInit();
+void metrologyUpdate();
+void metrologyOutput();
+
+// Définitions des fonctions de l'affichage
+void clearLCD();
+int read_LCD_buttons();
+
+
+/******************* Main *********************/
+
+void setup() {
+  // start serial
+  Serial.begin(9600);
+  
+ // start the library
+ lcd.begin(16, 2);               
+  
+  // Initialisation de toutes les machines à états
+  horlogeInit();
+  metrologyInit();
+}
+
+void loop() {
+  // Mise à jour des états
+  horlogeUpdate();
+  metrologyUpdate();
+  
+  // Mise à jour des sorties
+  horlogeOutput();
+  metrologyOutput();
+
+}
+
+
+/**************** LCD Functions ******************/
+
 int read_LCD_buttons(){               // read the buttons
     adc_key_in = analogRead(0);       // read the value from the sensor 
 
-    // my buttons when read are centered at these valies: 0, 144, 329, 504, 741
+    // my buttons when read are centered at these values: 0, 144, 329, 504, 741
     // we add approx 50 to those values and check to see if we are close
     // We make this the 1st option for speed reasons since it will be the most likely result
 
     if (adc_key_in > 1000) return btnNONE; 
-
-    // For V1.1 us this threshold
     if (adc_key_in < 50)   return btnRIGHT;  
     if (adc_key_in < 250)  return btnUP; 
     if (adc_key_in < 450)  return btnDOWN; 
@@ -32,56 +112,17 @@ int read_LCD_buttons(){               // read the buttons
     return btnNONE;                // when all others fail, return this.
 }
 
-
-
-
-typedef enum {
-  H_INIT,
-  H_IDLE,
-  H_TICK_H,
-  H_TICK_D
-} HORLOGE_STATE;
-
-// Etats courants
-HORLOGE_STATE horlogeState;
-
-// Variables globales
-unsigned long timer = 0;
-int tempoHour = 1000;
-int nb_h = 0, nb_d = 0;
-
-// Définitions des fonctions de la tâche Horloge
-void horlogeInit();
-void horlogeUpdate();
-void horlogeOutput();
-
-bool ledOnOFF = LOW;
-
-/******************* Main *********************/
-
-void setup() {
-  
- lcd.begin(16, 2);               // start the library
- lcd.setCursor(0,0);             // set the LCD cursor   position 
- lcd.print("Push the buttons");  // print a simple message on the LCD
-  
-  // Initialisation de toutes les machines à états
-  horlogeInit();
+void clearLCD(){
+  lcd.setCursor(0,0);
+  lcd.print("                ");
+  lcd.setCursor(0,1);
+  lcd.print("                ");
 }
 
-void loop() {
-  // Mise à jour des états
-  horlogeUpdate();
-
-  // Mise à jour des sorties
-  horlogeOutput();
-}
-
-/**********************************************/
+/**************** Horloge functions ******************/
 
 void horlogeInit() {
   horlogeState = H_INIT;
-  pinMode(13, OUTPUT);
 }
 
 void horlogeUpdate()
@@ -118,18 +159,134 @@ void horlogeOutput() {
   switch (horlogeState)
   {
     case H_INIT :
-      lcd.setCursor(0,1);
-      lcd.print(nb_h);
-      lcd.print(" ");
+      //lcd.setCursor(14,0);
+      //lcd.print(nb_h);
+      tickHour = 0;
+      tickDay = 0;
       break;
     case H_IDLE :
       break;
     case H_TICK_H :
-      ledOnOFF = 1 - ledOnOFF;
-      digitalWrite(13,ledOnOFF);
+      tickHour = 1;
       break;
     case H_TICK_D :
+      tickDay = 1;
       break;
   }
 }
+
+
+/**************** Metrology functions ******************/
+
+void metrologyInit(){
+  metrologyState = M_IDLE;
+  currentWeather = CLOUDY;
+  forecastWeather = SUNNY;
+  lcd.setCursor(0,0);
+  lcd.print("CLOUDY          ");
+  lcd.setCursor(0,1);
+  lcd.print("SUNNY           ");
+  
+}
+
+void metrologyUpdate(){
+  METROLOGY_STATE nextState = metrologyState;
+  
+  switch(metrologyState)
+  {
+    case M_IDLE :
+      if (tickDay) nextState = M_SELECT;
+      break;
+    case M_SELECT :
+      nextState = M_IDLE;
+      break;
+  }
+  metrologyState = nextState;
+}
+
+void metrologyOutput(){
+    switch(metrologyState)
+  {
+    case M_IDLE :
+      break;
+    case M_SELECT :
+      int randCurrent = random(1,100);
+      int randForecast = random(1,100);
+      if      (randCurrent == 2)                      {currentWeather = (forecastWeather + 2)%5;}
+      else if (randCurrent == 1)                      {currentWeather = (forecastWeather - 2)%5;}
+      else if (randCurrent > 2 && randCurrent <= 7)   {currentWeather = (forecastWeather + 1)%5;}
+      else if (randCurrent > 7 && randCurrent <= 12)  {currentWeather = (forecastWeather - 1)%5;}
+      else if (randCurrent > 12 && randCurrent <= 100){currentWeather = forecastWeather;}
+
+      lcd.setCursor(0,0);
+      //lcd.print("Today : ");
+      switch (currentWeather){
+        case RAINNY :
+          lcd.print("RAINNY          ");
+          currentWeatherString = "rainny";
+          break;
+        case CLOUDY :
+          lcd.print("CLOUDY          ");
+          forecastWeatherString = "cloudy";
+          break;
+        case SUNNY :
+          lcd.print("SUNNY           ");
+          forecastWeatherString = "sunny";
+          break;
+        case HEATWAVE :
+          lcd.print("HEATWAVE        ");
+          forecastWeatherString = "heatwave";
+          break;
+        case THUNDERSTORM :
+          lcd.print("THUNDERSTORM    ");
+          forecastWeatherString = "thunderstorm";
+          break;
+      }
+      lcd.setCursor(13,0);
+      lcd.print(randCurrent);
+
+      if      (randForecast >  0 && randForecast <= 15) {forecastWeather = RAINNY;}
+      else if (randForecast > 15 && randForecast <= 35) {forecastWeather = CLOUDY;}
+      else if (randForecast > 35 && randForecast <= 75) {forecastWeather = SUNNY;}
+      else if (randForecast > 75 && randForecast <= 95) {forecastWeather = HEATWAVE;}
+      else if (randForecast > 95 && randForecast <= 100){forecastWeather = THUNDERSTORM;}
+
+      lcd.setCursor(0,1);
+      //lcd.print("Tomorow : ");
+      switch (forecastWeather){
+        case RAINNY :
+          lcd.print("RAINNY          ");
+          forecastWeatherString = "rainny";
+          break;
+        case CLOUDY :
+          lcd.print("CLOUDY          ");
+          forecastWeatherString = "cloudy";
+          break;
+        case SUNNY :
+          lcd.print("SUNNY           ");
+          forecastWeatherString = "sunny";
+          break;
+        case HEATWAVE :
+          lcd.print("HEATWAVE        ");
+          forecastWeatherString = "heatwave";
+          break;
+        case THUNDERSTORM :
+          lcd.print("THUNDERSTROM    ");
+          forecastWeatherString = "thunderstorm";
+          break;
+      }
+      lcd.setCursor(13,1);
+      lcd.print(randForecast);
+
+      Serial.println("{\"timestamp\" : \"38\",\"weather\" : {\"dfn\" : \"0\", \"weather\" : \"rainny\"}}");
+      //Serial.println("{\"timestamp\" : \"%d\",\"weather\" : {\"dfn\" : \"0\", \"weather\" : \"%s\"}}",nb_d*24+nb_h, currentWeatherString);
+      //Serial.println("{\"timestamp\" : \"%d\",\"weather\" : {\"dfn\" : \"1\", \"weather\" : \"%s\"}}",nb_d*24+nb_h, forecastWeatherString);
+      break;
+  }
+}
+
+
+
+/**************** Click functions ******************/
+
 

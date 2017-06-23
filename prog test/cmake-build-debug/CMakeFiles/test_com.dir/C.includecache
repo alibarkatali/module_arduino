@@ -11,4 +11,10 @@ stdio.h
 -
 curl/curl.h
 -
+sys/fcntl.h
+-
+unistd.h
+-
+stdlib.h
+-
 
