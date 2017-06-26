@@ -54,7 +54,7 @@ CLICK_STATE clickState;
 
 // Variables globales
 unsigned long timer = 0, clickTimer = 0;
-int tempoHour = 100;
+int tempoHour = 500;
 int nb_h = 0, nb_d = 0, hFromBegin;
 bool tickHour = 0, tickDay = 0;
 String currentWeatherString, forecastWeatherString;
@@ -287,7 +287,7 @@ void metrologyOutput(){
         //Serial.print("{\"timestamp\" : \"");
         //Serial.print(hFromBegin);
         //Serial.print("\",\"weather\" : {\"dfn\" : \"1\", \"weather\" : \"");
-        Serial.print("{\"dfn\" : \"1\", \"weather\": \"");
+        Serial.print("{\"dfn\" : \"1\", \"weather\" : \"");
         
         lcd.setCursor(0,1);
         //lcd.print("Tomorow : ");
