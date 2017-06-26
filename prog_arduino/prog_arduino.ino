@@ -1,6 +1,7 @@
 #include <LiquidCrystal.h>
 #include <math.h>
 
+
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);           // select the pins used on the LCD panel
 
 // define some values used by the panel and buttons
@@ -40,27 +41,39 @@ typedef enum {
   thunderstorm
 } WEATHER;
 
+typedef enum {
+  C_IDLE,
+  C_ON,
+  C_HOLD
+}CLICK_STATE;
+
 // Etats courants
 HORLOGE_STATE horlogeState;
 METROLOGY_STATE metrologyState;
-int currentWeather, forecastWeather;
+CLICK_STATE clickState;
 
 // Variables globales
-unsigned long timer = 0;
-int tempoHour = 200;
-int nb_h = 0, nb_d = 0;
+unsigned long timer = 0, clickTimer = 0;
+int tempoHour = 100;
+int nb_h = 0, nb_d = 0, hFromBegin;
 bool tickHour = 0, tickDay = 0;
 String currentWeatherString, forecastWeatherString;
+int currentWeather, forecastWeather;
 
 // Définitions des fonctions de la tâche Horloge
 void horlogeInit();
 void horlogeUpdate();
 void horlogeOutput();
 
-// Définitions des fonctions de la tâche Horloge
+// Définitions des fonctions de la tâche Metrology
 void metrologyInit();
 void metrologyUpdate();
 void metrologyOutput();
+
+// Définitions des fonctions de la tâche Click
+void clickInit();
+void clickUpdate();
+void clickOutput();
 
 // Définitions des fonctions de l'affichage
 void clearLCD();
@@ -79,21 +92,24 @@ void setup() {
   // Initialisation de toutes les machines à états
   horlogeInit();
   metrologyInit();
+  clickInit();
 }
 
 void loop() {
   // Mise à jour des états
   horlogeUpdate();
   metrologyUpdate();
+  clickUpdate();
   
   // Mise à jour des sorties
   horlogeOutput();
   metrologyOutput();
+  clickOutput();
 
 }
 
 
-/**************** LCD Functions ******************/
+/**************** Screen Functions ******************/
 
 int read_LCD_buttons(){               // read the buttons
     adc_key_in = analogRead(0);       // read the value from the sensor 
@@ -205,88 +221,182 @@ void metrologyUpdate(){
 }
 
 void metrologyOutput(){
+    hFromBegin = nb_d * 24 + nb_h;
+    
+    lcd.setCursor(12,0);
+    lcd.print(hFromBegin);  
+    lcd.setCursor(12,1);
+    lcd.print(tempoHour); 
+    
     switch(metrologyState)
-  {
-    case M_IDLE :
-      break;
-    case M_SELECT :
-      int randCurrent = random(1,100);
-      int randForecast = random(1,100);
-      if      (randCurrent == 2)                      {currentWeather = (forecastWeather + 2)%5;}
-      else if (randCurrent == 1)                      {currentWeather = (forecastWeather - 2)%5;}
-      else if (randCurrent > 2 && randCurrent <= 7)   {currentWeather = (forecastWeather + 1)%5;}
-      else if (randCurrent > 7 && randCurrent <= 12)  {currentWeather = (forecastWeather - 1)%5;}
-      else if (randCurrent > 12 && randCurrent <= 100){currentWeather = forecastWeather;}
+    {
+      case M_IDLE :
+        break;
+      case M_SELECT :
+        int randCurrent = random(1,100);
+        int randForecast = random(1,100);
+        if      (randCurrent == 2)                      {currentWeather = (forecastWeather + 2)%5;}
+        else if (randCurrent == 1)                      {currentWeather = (forecastWeather - 2)%5;}
+        else if (randCurrent > 2 && randCurrent <= 7)   {currentWeather = (forecastWeather + 1)%5;}
+        else if (randCurrent > 7 && randCurrent <= 12)  {currentWeather = (forecastWeather - 1)%5;}
+        else if (randCurrent > 12 && randCurrent <= 100){currentWeather = forecastWeather;}
 
-      lcd.setCursor(0,0);
-      //lcd.print("Today : ");
-      switch (currentWeather){
-        case RAINNY :
-          lcd.print("RAINNY          ");
-          currentWeatherString = "rainny";
-          break;
-        case CLOUDY :
-          lcd.print("CLOUDY          ");
-          forecastWeatherString = "cloudy";
-          break;
-        case SUNNY :
-          lcd.print("SUNNY           ");
-          forecastWeatherString = "sunny";
-          break;
-        case HEATWAVE :
-          lcd.print("HEATWAVE        ");
-          forecastWeatherString = "heatwave";
-          break;
-        case THUNDERSTORM :
-          lcd.print("THUNDERSTORM    ");
-          forecastWeatherString = "thunderstorm";
-          break;
-      }
-      lcd.setCursor(13,0);
-      lcd.print(randCurrent);
+        Serial.print("{\"timestamp\" : \"");
+        Serial.print(hFromBegin);
+        Serial.print("\",\"weather\" : [{\"dfn\" : \"0\", \"weather\" : \"");
+        lcd.setCursor(0,0);
+        switch (currentWeather){
+          case RAINNY :
+            lcd.print("RAINNY          ");
+            currentWeatherString = "rainny";
+            Serial.print("rainny");
+            break;
+          case CLOUDY :
+            lcd.print("CLOUDY          ");
+            forecastWeatherString = "cloudy";
+            Serial.print("cloudy");
+            break;
+          case SUNNY :
+            lcd.print("SUNNY           ");
+            forecastWeatherString = "sunny";
+            Serial.print("sunny");
+            break;
+          case HEATWAVE :
+            lcd.print("HEATWAVE        ");
+            forecastWeatherString = "heatwave";
+            Serial.print("heatwave");
+            break;
+          case THUNDERSTORM :
+            lcd.print("THUNDERSTORM    ");
+            forecastWeatherString = "thunderstorm";
+            Serial.print("thunderstorm");
+            break;
+        }
+        Serial.print("\"},");
+        
+//        lcd.setCursor(13,0);
+//        lcd.print(randCurrent);
+  
+        if      (randForecast >  0 && randForecast <= 15) {forecastWeather = RAINNY;}
+        else if (randForecast > 15 && randForecast <= 35) {forecastWeather = CLOUDY;}
+        else if (randForecast > 35 && randForecast <= 75) {forecastWeather = SUNNY;}
+        else if (randForecast > 75 && randForecast <= 95) {forecastWeather = HEATWAVE;}
+        else if (randForecast > 95 && randForecast <= 100){forecastWeather = THUNDERSTORM;}
 
-      if      (randForecast >  0 && randForecast <= 15) {forecastWeather = RAINNY;}
-      else if (randForecast > 15 && randForecast <= 35) {forecastWeather = CLOUDY;}
-      else if (randForecast > 35 && randForecast <= 75) {forecastWeather = SUNNY;}
-      else if (randForecast > 75 && randForecast <= 95) {forecastWeather = HEATWAVE;}
-      else if (randForecast > 95 && randForecast <= 100){forecastWeather = THUNDERSTORM;}
 
-      lcd.setCursor(0,1);
-      //lcd.print("Tomorow : ");
-      switch (forecastWeather){
-        case RAINNY :
-          lcd.print("RAINNY          ");
-          forecastWeatherString = "rainny";
-          break;
-        case CLOUDY :
-          lcd.print("CLOUDY          ");
-          forecastWeatherString = "cloudy";
-          break;
-        case SUNNY :
-          lcd.print("SUNNY           ");
-          forecastWeatherString = "sunny";
-          break;
-        case HEATWAVE :
-          lcd.print("HEATWAVE        ");
-          forecastWeatherString = "heatwave";
-          break;
-        case THUNDERSTORM :
-          lcd.print("THUNDERSTROM    ");
-          forecastWeatherString = "thunderstorm";
-          break;
-      }
-      lcd.setCursor(13,1);
-      lcd.print(randForecast);
-
-      Serial.println("{\"timestamp\" : \"38\",\"weather\" : {\"dfn\" : \"0\", \"weather\" : \"rainny\"}}");
-      //Serial.println("{\"timestamp\" : \"%d\",\"weather\" : {\"dfn\" : \"0\", \"weather\" : \"%s\"}}",nb_d*24+nb_h, currentWeatherString);
-      //Serial.println("{\"timestamp\" : \"%d\",\"weather\" : {\"dfn\" : \"1\", \"weather\" : \"%s\"}}",nb_d*24+nb_h, forecastWeatherString);
-      break;
-  }
+        //Serial.print("{\"timestamp\" : \"");
+        //Serial.print(hFromBegin);
+        //Serial.print("\",\"weather\" : {\"dfn\" : \"1\", \"weather\" : \"");
+        Serial.print("{\"dfn\" : \"1\", \"weather\": \"");
+        
+        lcd.setCursor(0,1);
+        //lcd.print("Tomorow : ");
+        switch (forecastWeather){
+          case RAINNY :
+            lcd.print("RAINNY          ");
+            forecastWeatherString = "rainny";
+            Serial.print("rainny");
+            break;
+          case CLOUDY :
+            lcd.print("CLOUDY          ");
+            forecastWeatherString = "cloudy";
+            Serial.print("cloudy");
+            break;
+          case SUNNY :
+            lcd.print("SUNNY           ");
+            forecastWeatherString = "sunny";
+            Serial.print("sunny");
+            break;
+          case HEATWAVE :
+            lcd.print("HEATWAVE        ");
+            forecastWeatherString = "heatwave";
+            Serial.print("heatwave");
+            break;
+          case THUNDERSTORM :
+            lcd.print("THUNDERSTROM    ");
+            forecastWeatherString = "thunderstorm";
+            Serial.print("thunderstorm");
+            break;
+        }
+        Serial.print("\"}]}");
+        Serial.println("!");
+        
+//        lcd.setCursor(13,1);
+//        lcd.print(randForecast);
+        
+        //Serial.println("<{\"timestamp\" : \"345\",\"weather\" : [{\"dfn\" : \"0\", \"weather\" : \"sunny\"},{\"dfn\" : \"1\", \"weather\" : \"sunny\"}]}>");
+        //Serial.flush();
+        break;
+    }
 }
 
 
 
 /**************** Click functions ******************/
 
+void clickInit(){
+  clickState = C_IDLE;
+}
+
+void clickUpdate(){
+  CLICK_STATE nextClickState = clickState;
+  int btn = read_LCD_buttons();
+  switch (clickState)
+  {
+    case C_IDLE :
+      if (btn != btnNONE) {
+        nextClickState = C_ON;
+        clickTimer = millis()+10;
+      }
+      break;
+    case C_ON :
+      if (clickTimer < millis() && read_LCD_buttons() != btnNONE){
+        nextClickState = C_HOLD;
+      }
+      break;
+    case C_HOLD :
+      if (read_LCD_buttons() == btnNONE)
+        nextClickState = C_IDLE;
+      break;
+  }
+  clickState = nextClickState;
+}
+
+void clickOutput(){
+
+  int btn = read_LCD_buttons();
+  static bool first = false;
+  switch (clickState)
+  {
+    case C_IDLE :
+      break;
+    case C_ON :
+      first = true;
+      break;
+    case C_HOLD :
+      if (first){
+        switch (btn)
+        {
+          case btnRIGHT:
+            break; 
+          case btnUP:
+            if (tempoHour < 12400)
+              tempoHour += 100;
+            break; 
+          case btnDOWN:
+            if (tempoHour >= 200)
+              tempoHour -= 100;
+            break; 
+          case btnLEFT:
+            break; 
+          case btnSELECT:
+            break; 
+          case btnNONE:
+            break; 
+        }
+        first = false;
+      }
+      break;
+  }
+}
 
