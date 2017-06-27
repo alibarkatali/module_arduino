@@ -1,4 +1,69 @@
-/***************************************************************************
+
+#include <stdio.h>
+#include <curl/curl.h>
+#include <sys/fcntl.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+void puchData();
+int frameTraitment();
+char data[255];
+
+int main(void)
+{
+    while(1){
+
+        if(frameTraitment() == 1){
+
+            int i=0;
+            while (data[i] != '\0'){
+                //printf("%c", data[i]);
+                i++;
+            }
+            data[i] = '\0';
+            //printf("%s\n", data);
+            puchData();
+        }
+        if(data[0] == '!'){ break;}
+    }
+    return 0;
+}
+
+
+int frameTraitment()
+{
+    // This function read the buffer char by char until '!'
+    static int count = 0;
+    char newChar = ' ';
+    static int fd;
+
+    if (count == 0){
+        if ((fd=open("/dev/ttyACM0",O_RDWR)) == -1){
+            perror("open");
+            exit(-1);
+            return -1;
+        }
+    }
+
+    int nb = read(fd, &newChar, 1);
+    if (nb == 1){
+        if (newChar == '!') {
+            data[count] = '\0';
+            count++;
+            count = 0;
+            return 1;
+        }else{
+            data[count] = newChar;
+            count++;
+            return 0;
+        }
+    }
+    return 0;
+}
+
+
+void puchData(){
+ /***************************************************************************
  *                                  _   _ ____  _
  *  Project                     ___| | | |  _ \| |
  *                             / __| | | | |_) | |
@@ -19,42 +84,13 @@
  * KIND, either express or implied.
  *
  ***************************************************************************/
-/* <DESC>
- * simple HTTP POST using the easy interface
- * </DESC>
- */
-#include <stdio.h>
-#include <curl/curl.h>
-#include <sys/fcntl.h>
-#include <unistd.h>
-#include <stdlib.h>
 
-int main(void)
-{
     CURL *curl;
     CURLcode res;
-    int fd;
-    int test=0;
-    char buf[255];
 
     /* In windows, this will init the winsock stuff */
     curl_global_init(CURL_GLOBAL_ALL);
     struct curl_slist *list = NULL;
-
-    if ((fd=open("/dev/ttyACM0",O_RDWR)) == -1){
-        perror("open");
-        exit(-1);
-    }
-    while (test == 0) {
-        int nb = read(fd, &buf, 255);
-        buf[nb] = '\0';
-
-
-        if (nb > 0) {
-            printf("%s\n", buf);
-            test = 1;
-        }
-    }
 
     /* get a curl handle */
     curl = curl_easy_init();
@@ -64,9 +100,9 @@ int main(void)
            data. */
         curl_easy_setopt(curl, CURLOPT_URL, "http://fast-wave-77815.herokuapp.com/metrology");
         //curl_easy_setopt(curl, CURLOPT_URL, "http://127.0.0.1:5000/metrology");
+
         /* Now specify the POST data */
-        //curl_easy_setopt(curl, CURLOPT_POSTFIELDS, "{\"timestamp\" : \"24\",\"weather\" : {\"dfn\" : \"0\", \"weather\" : \"RAINNY\"}}");
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, buf);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
 
         list = curl_slist_append(list, "content-Type:application/json");
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
@@ -75,12 +111,10 @@ int main(void)
         res = curl_easy_perform(curl);
         /* Check for errors */
         if(res != CURLE_OK)
-            fprintf(stderr, "curl_easy_perform() failed: %s\n",
-                    curl_easy_strerror(res));
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 
         /* always cleanup */
         curl_easy_cleanup(curl);
     }
     curl_global_cleanup();
-    return 0;
 }

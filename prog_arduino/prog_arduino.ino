@@ -233,8 +233,8 @@ void metrologyOutput(){
       case M_IDLE :
         break;
       case M_SELECT :
-        int randCurrent = random(1,100);
-        int randForecast = random(1,100);
+        int randCurrent = random(1,101);
+        int randForecast = random(1,101);
         if      (randCurrent == 2)                      {currentWeather = (forecastWeather + 2)%5;}
         else if (randCurrent == 1)                      {currentWeather = (forecastWeather - 2)%5;}
         else if (randCurrent > 2 && randCurrent <= 7)   {currentWeather = (forecastWeather + 1)%5;}
