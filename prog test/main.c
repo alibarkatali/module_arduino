@@ -4,47 +4,49 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-void pushData();
-int getData();
+void push_data();
+int get_data();
 char data[255];
 
 int main(void)
 {
     while(1){
-        int getTest = getData();
-        if(getTest == 1){         //return 1 only when all data has been readed from com
-            printf("%s\n", data);   //to verify data format
-            pushData();             //send data to the server
+        int get_test = get_data();
+        if(get_test == 1){              //return 1 only when all data has been readed from com
+            printf("%s\n", data);     //to verify data format
+            push_data();                //send data to the server
+            printf("data pushed\n");
         }
-        else if(getTest == -1){ break;}
+        else if(get_test == -1){ break;}
     }
     return 0;
 }
 
 
-int getData()
+int get_data()
 {
     // This function read the buffer char by char until '!'
     static int count = 0;
-    char newChar = ' ';
+    char new_char = ' ';
     static int fd;
 
     if (count == 0){        // open the file only once at the beginning
         if ((fd=open("/dev/ttyACM0",O_RDWR)) == -1){
             perror("open");
             exit(-1);
-            return -1;      // an error in openning com break the while(1)
+            return -1;      // an error in openning com buffer breaks the while(1)
         }
     }
 
-    ssize_t nb = read(fd, &newChar, 1);
-    if (nb == 1){
-        if (newChar == '!') {
-            data[count] = '\0';
+    ssize_t nb = read(fd, &new_char, 1);
+    if (nb == 1){                   //testing if something has been read from buffer
+        if (new_char == '!') {
+            data[count] = '\0';     //when json is over, set the last char
             count = 0;
+            //close(fd);
             return 1;
         }else{
-            data[count] = newChar;
+            data[count] = new_char;  //add a new char to data from buffer
             count++;
             return 0;
         }
@@ -52,8 +54,7 @@ int getData()
     return 0;
 }
 
-
-void pushData(){
+void push_data(){
  /***************************************************************************
  *                                  _   _ ____  _
  *  Project                     ___| | | |  _ \| |
